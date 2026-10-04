@@ -1,0 +1,27 @@
+{
+  "name": "typescript-interpreter",
+  "version": "1.0.0",
+  "description": "typescript-interpreter",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Aquid0/typescript-interpreter.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/Aquid0/typescript-interpreter/issues"
+  },
+  "homepage": "https://github.com/Aquid0/typescript-interpreter#readme",
+  "devDependencies": {
+    "nodemon": "^3.1.14",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^7.0.2"
+  }
+}
