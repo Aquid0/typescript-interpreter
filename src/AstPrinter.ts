@@ -1,4 +1,6 @@
 import { Binary, Unary, Expr, Grouping, Literal, type Visitor } from "./Expr.js";
+import { Token } from "./Token.js"
+import { TokenType } from "./TokenType.js"
 
 export class AstPrinter implements Visitor<string> {
     print(expr: Expr): string {
@@ -25,16 +27,26 @@ export class AstPrinter implements Visitor<string> {
     parenthesize(name: string, ...exprs: Expr[]) {
         let out = "";
 
-        out.concat("(").concat(name);
-
+        out += `(${name}`
         for (const expr of exprs) {
-            out.concat(" ");
-            out.concat(expr.accept(this));
+            out += ` ${expr.accept(this)}`;
         }
 
-        out.concat(")");
+        out += ")"; 
 
         return out;
     }
-
 }
+
+function main() {
+    const expression: Expr = new Binary(
+        new Unary(
+            new Token(TokenType.MINUS, "-", null, 1),
+            new Literal(123)), 
+        new Token(TokenType.STAR, "*", null, 1),
+        new Grouping(new Literal(45.67)));
+    
+    console.log(new AstPrinter().print(expression));
+};
+
+main();
