@@ -32,7 +32,7 @@ export class Grouping extends Expr {
 }
 
 export class Literal extends Expr {
-    constructor(readonly value: Object) {
+    constructor(readonly value: any) {
         super();
     }
 
