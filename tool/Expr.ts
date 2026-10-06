@@ -1,4 +1,5 @@
 import fs from "fs";
+import path from "node:path";
 
 function main(args = process.argv.slice(2)) {
     if (args.length != 1) {
@@ -12,13 +13,21 @@ function main(args = process.argv.slice(2)) {
         "Literal  : any value",
         "Unary    : Token operator, Expr right",
     ]);
+
+    defineAst(outputDir, "Stmt", [
+        "Expression : Expr expression", 
+        "Print      : Expr expression",
+    ]);
 }
 
 function defineAst(outputDir: string, baseName: string, types: string[]) {
-    const path: string = `${outputDir}/${baseName}.ts`;
+    const filePath: string = path.resolve(outputDir, `${baseName}.ts`);
     const lines: string[] = [];
 
     lines.push(`import { Token } from "./Token.js";`);
+    if (baseName === "Stmt") {
+        lines.push(`import { Expr } from "./Expr.js";`);
+    }
     lines.push(``);
 
     lines.push(`export abstract class ${baseName} {`);
@@ -41,7 +50,7 @@ function defineAst(outputDir: string, baseName: string, types: string[]) {
         defineType(lines, baseName, className, fields);
     }
 
-    fs.writeFileSync(path, lines.join("\n"));
+    fs.writeFileSync(filePath, lines.join("\n"));
 }
 
 function defineType(

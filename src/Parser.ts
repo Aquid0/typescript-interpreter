@@ -2,6 +2,7 @@ import { Token } from './Token.js';
 import { Grouping, Literal, Unary, Binary, Expr } from './Expr.js';
 import { TokenType } from './TokenType.js';
 import { error } from './main.js';
+import { Stmt, Print, Expression } from './Stmt.js';
 
 class ParseError extends Error {};
 
@@ -13,15 +14,32 @@ export class Parser {
         this.tokens = tokens;
     }
 
-    parse(): Expr | null {
-        try {
-            return this.expression();
-        } catch (err) {
-            if (err instanceof ParseError) {
-                return null;
-            }
-            throw err;
-        }
+    parse(): Stmt[] {
+        const statements: Stmt[] = [];
+
+        while(!this.isAtEnd()) {
+            statements.push(this.statement());
+        } 
+
+        return statements;
+    }
+
+    private statement(): Stmt {
+        if (this.match(TokenType.PRINT)) return this.printStatement();
+
+        return this.expressionStatement();
+    }
+
+    private printStatement(): Stmt {
+        const value: Expr = this.expression();
+        this.consume(TokenType.SEMICOLON, "Expect ';' after value.'");
+        return new Print(value);
+    }
+
+    private expressionStatement(): Stmt {
+        const expr: Expr = this.expression();
+        this.consume(TokenType.SEMICOLON, "Expect ';' after value.");
+        return new Expression(expr);
     }
 
     private expression(): Expr {
@@ -55,9 +73,9 @@ export class Parser {
     private term(): Expr {
         let expr: Expr = this.factor();
 
-        while (this.match(TokenType.MINUS, TokenType.MINUS)) {
+        while (this.match(TokenType.MINUS, TokenType.PLUS)) {
             const operator: Token = this.previous();
-            const right: Expr = this.term();
+            const right: Expr = this.factor();
             expr = new Binary(expr, operator, right);
         }
 
@@ -69,7 +87,7 @@ export class Parser {
 
         while (this.match(TokenType.SLASH, TokenType.STAR)) {
             const operator: Token = this.previous();
-            const right: Expr = this.term();
+            const right: Expr = this.unary();
             expr = new Binary(expr, operator, right);
         }
 
@@ -101,7 +119,7 @@ export class Parser {
             return new Grouping(expr);
         }
 
-        throw error(this.peek(), "Expect expression.");
+        throw this.error(this.peek(), "Expect expression.");
     }
 
     private match(...types: TokenType[]): boolean {

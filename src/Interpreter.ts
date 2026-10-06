@@ -1,15 +1,17 @@
-import { Binary, Grouping, Literal, Unary, type Visitor } from "./Expr.js";
+import { Binary, Grouping, Literal, Unary, type Visitor as ExprVisitor } from "./Expr.js";
 import { Expr } from "./Expr.js";
 import { Token } from "./Token.js";
 import { TokenType } from "./TokenType.js";
 import { RuntimeError } from "./RuntimeError.js";
 import { runtimeError } from "./main.js";
+import { Expression, Print, type Visitor as StmtVisitor, type Stmt} from './Stmt.js';
 
-export class Interpreter implements Visitor<any> {
-    interpret(expression: Expr) { 
+export class Interpreter implements ExprVisitor<any>, StmtVisitor<void> {
+    interpret(statements: Stmt[]) { 
         try {
-            const value = this.evaluate(expression); 
-            console.log(this.stringify(value));
+            for (const statement of statements) {
+                this.execute(statement);
+            }
         } catch (error) {
             if (error instanceof RuntimeError) {
                 runtimeError(error);
@@ -17,6 +19,15 @@ export class Interpreter implements Visitor<any> {
                 throw error;
             }
         }
+    }
+
+    visitExpressionStmt(stmt: Expression): void {
+        this.evaluate(stmt.expression);
+    }
+
+    visitPrintStmt(stmt: Print): void {
+        const value: any = this.evaluate(stmt.expression);
+        console.log(this.stringify(value));
     }
 
     visitLiteralExpr(expr: Literal): any {
@@ -86,6 +97,10 @@ export class Interpreter implements Visitor<any> {
 
         // Unreachable
         return null;
+    }
+
+    private execute (stmt: Stmt) {
+        stmt.accept(this);
     }
 
     private isEqual(a: any, b: any): boolean {

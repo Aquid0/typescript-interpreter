@@ -4,15 +4,9 @@ import { Scanner } from "./Scanner.js";
 import { Token } from "./Token.js";
 import { TokenType } from "./TokenType.js";
 import { Parser } from "./Parser.js";
-import { Expr } from "./Expr.js";
-import { AstPrinter } from "./AstPrinter.js";
 import { RuntimeError } from "./RuntimeError.js";
 import { Interpreter } from "./Interpreter.js";
-
-const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-});
+import { type Stmt } from  "./Stmt.js";
 
 let hadError = false;  
 let hadRuntimeError = false;
@@ -43,27 +37,32 @@ function runFile(path: string | undefined) {
 }
 
 function runPrompt() {
-    while (true) { 
-        rl.question("> ", (line) => {
-            if (line === null) {
-                return;
-            }
-            run(line);
-            hadError = false;
-        })
-    }
+    const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+    });
+    rl.setPrompt("> ");
+    rl.prompt();
+    rl.on("line", (line) => {
+        run(line);
+        hadError = false;
+        rl.prompt();
+    });
+    rl.on("close", () => {
+        process.exit(0);
+    });
 }
 
 function run(source: string) { 
     const scanner = new Scanner(source);
     const tokens = scanner.scanTokens();
 
-    const parser: Parser = new Parser(tokens);
-    const expression: Expr | null = parser.parse();
+    const parser = new Parser(tokens);
+    const statements: Stmt[] = parser.parse();
 
-    if (hadError || expression === null) return;
+    if (hadError || !statements) return;
 
-    interpreter.interpret(expression);
+    interpreter.interpret(statements);
 } 
 
 export function error(target: number | Token, message: string) { 
@@ -89,4 +88,6 @@ function report(line: number, where: string, message: string) {
     hadError = true;
 }
 
-main();
+if (process.argv[1]?.endsWith("main.ts") || process.argv[1]?.endsWith("main.js")) {
+    main();
+}
