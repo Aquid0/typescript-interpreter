@@ -1,8 +1,8 @@
 import { Token } from './Token.js'; 
-import { Variable, Grouping, Literal, Unary, Binary, Expr, Assign } from './Expr.js';
+import { Logical, Variable, Grouping, Literal, Unary, Binary, Expr, Assign } from './Expr.js';
 import { TokenType } from './TokenType.js';
 import { error } from './main.js';
-import { Block, Stmt, Print, Expression, Var } from './Stmt.js';
+import { While, If, Block, Stmt, Print, Expression, Var } from './Stmt.js';
 
 class ParseError extends Error {};
 
@@ -18,7 +18,7 @@ export class Parser {
         const statements: Stmt[] = [];
 
         while(!this.isAtEnd()) {
-            const decl = this.declaration();
+            const decl: Stmt | null = this.declaration();
             if (decl) statements.push(decl);
         } 
 
@@ -53,10 +53,98 @@ export class Parser {
     }
 
     private statement(): Stmt {
+        if (this.match(TokenType.FOR)) return this.forStatement();
+        if (this.match(TokenType.IF)) return this.ifStatement();
         if (this.match(TokenType.PRINT)) return this.printStatement();
+        if (this.match(TokenType.WHILE)) return this.whileStatement();
         if (this.match(TokenType.LEFT_BRACE)) return new Block(this.block());
 
         return this.expressionStatement();
+    }
+
+    private forStatement(): Stmt {
+        this.consume(TokenType.LEFT_PAREN, "Expect '(' after 'for'.");
+
+        
+        /*
+
+        forStmt         -> "for" "(" ( varDecl | exprStmt | ";" )
+                           expression? ";"
+                           expression? ")" statement ;
+        
+        Clause 1: Initializer - usually an expression/variable declaration scoped to the rest of the for loop
+        
+        Clause 2: Condition - Controls when to exit the loop
+
+        Clause 3: Increment - Arbitrary expression that does work at the end of each loop iteration
+
+        */
+
+        // Clause 1
+        let initializer;
+        if (this.match(TokenType.SEMICOLON)) {
+            initializer = null;
+        } else if (this.match(TokenType.VAR)) {
+            initializer = this.varDeclaration();
+        } else {
+            initializer = this.expressionStatement();
+        }
+        
+        // Clause 2
+        let condition = null; 
+        if (!this.check(TokenType.SEMICOLON)) {
+            condition = this.expression();
+        }
+        this.consume(TokenType.SEMICOLON, "Expect ';' after loop condition.");
+
+        // Clause 3
+        let increment = null;
+        if (!this.check(TokenType.RIGHT_PAREN)) {
+            increment = this.expression();
+        }
+        this.consume(TokenType.RIGHT_PAREN, "Expect ')' after clauses.");        
+
+        let body: Stmt = this.statement();
+
+        // DESUGAR TO WHILE LOOP
+        // Append the increment to run at the end of every iteration
+        if (increment != null) {
+            body = new Block([body, new Expression(increment)]);
+        }
+
+        // Wrap it in a While loop
+        if (condition == null) condition = new Literal(true);
+        body = new While(condition, body);
+
+        // Place the initializer before the loop inside a new scope
+        if (initializer != null) {
+            body = new Block([initializer, body]);
+        }
+
+        return body;    
+    }
+
+    private whileStatement(): Stmt { 
+        this.consume(TokenType.LEFT_PAREN, "Expect '(' after 'while'.");
+        const condition: Expr = this.expression();
+        this.consume(TokenType.RIGHT_PAREN, "Expect ')' after condition.");
+        const body: Stmt = this.statement();
+
+        return new While(condition, body);
+    }
+
+    private ifStatement(): Stmt {
+        this.consume(TokenType.LEFT_PAREN, "Expect '(' after 'if'");
+        const condition: Expr = this.expression();
+        this.consume(TokenType.RIGHT_PAREN, "Expect ')' after 'if'");
+
+        const thenBranch: Stmt = this.statement(); 
+        let elseBranch: Stmt | null = null;
+        if (this.match(TokenType.ELSE)) {
+            elseBranch = this.statement();
+        }
+
+        return new If(condition, thenBranch, elseBranch);
     }
 
     private block(): Stmt[] { 
@@ -88,7 +176,7 @@ export class Parser {
     }
 
     private assignment(): Expr {
-        const expr: Expr = this.equality();
+        const expr: Expr = this.or();
 
         if (this.match(TokenType.EQUAL)) {
             const equals: Token = this.previous();
@@ -100,6 +188,30 @@ export class Parser {
             }
 
             error(equals, "Invalid asignment targe.");
+        }
+
+        return expr;
+    }
+
+    private or(): Expr {
+        let expr: Expr = this.and();
+
+        while (this.match(TokenType.OR)) { 
+            const operator: Token = this.previous();
+            const right: Expr = this.and();
+            expr = new Logical(expr, operator, right);            
+        }
+
+        return expr;
+    }
+
+    private and(): Expr { 
+        let expr: Expr = this.equality();
+
+        while (this.match(TokenType.AND)) { 
+            const operator: Token = this.previous();
+            const right: Expr = this.equality();
+            expr = new Logical(expr, operator, right);
         }
 
         return expr;

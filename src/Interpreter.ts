@@ -1,10 +1,10 @@
-import { Assign, Binary, Grouping, Literal, Unary, Variable, type Visitor as ExprVisitor } from "./Expr.js";
+import { Assign, Binary, Grouping, Literal, Logical, Unary, Variable, type Visitor as ExprVisitor } from "./Expr.js";
 import { Expr } from "./Expr.js";
 import { Token } from "./Token.js";
 import { TokenType } from "./TokenType.js";
 import { RuntimeError } from "./RuntimeError.js";
 import { runtimeError } from "./main.js";
-import { Var, Expression, Print, type Visitor as StmtVisitor, type Stmt, Block} from './Stmt.js';
+import { Var, Expression, Print, type Visitor as StmtVisitor, type Stmt, Block, If, While} from './Stmt.js';
 import { Environment } from "./Environment.js";
 
 export class Interpreter implements ExprVisitor<any>, StmtVisitor<void> {
@@ -50,6 +50,33 @@ export class Interpreter implements ExprVisitor<any>, StmtVisitor<void> {
 
     visitExpressionStmt(stmt: Expression): void {
         this.evaluate(stmt.expression);
+    }
+
+    visitIfStmt(stmt: If): void {
+        if (this.isTruthy(this.evaluate(stmt.condition))) {
+            this.execute(stmt.thenBranch);
+        } else if (stmt.elseBranch != null) { 
+            this.execute(stmt.elseBranch);
+        }
+    }
+
+    visitWhileStmt(stmt: While): void {
+        while (this.isTruthy(this.evaluate(stmt.condition))) {
+            this.execute(stmt.body);
+        }
+    }
+
+    visitLogicalExpr(expr: Logical): any {
+        const left: any = this.evaluate(expr.left);
+
+        // Short-circuit 
+        if (expr.operator.type === TokenType.OR) { 
+            if (this.isTruthy(left)) return left;
+        } else { // AND
+            if (!this.isTruthy(left)) return left;
+        }
+
+        return this.evaluate(expr.right);
     }
 
     visitPrintStmt(stmt: Print): void {

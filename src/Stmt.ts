@@ -8,8 +8,10 @@ export abstract class Stmt {
 export interface Visitor<R> {
     visitBlockStmt(stmt: Block): R;
     visitExpressionStmt(stmt: Expression): R;
+    visitIfStmt(stmt: If): R;
     visitPrintStmt(stmt: Print): R;
     visitVarStmt(stmt: Var): R;
+    visitWhileStmt(stmt: While): R;
 }
 
 export class Block extends Stmt {
@@ -32,6 +34,16 @@ export class Expression extends Stmt {
     }
 }
 
+export class If extends Stmt {
+    constructor(readonly condition: Expr, readonly thenBranch: Stmt, readonly elseBranch: Stmt|null) {
+        super();
+    }
+
+    accept<R>(visitor: Visitor<R>): R {
+        return visitor.visitIfStmt(this);
+    }
+}
+
 export class Print extends Stmt {
     constructor(readonly expression: Expr) {
         super();
@@ -49,5 +61,15 @@ export class Var extends Stmt {
 
     accept<R>(visitor: Visitor<R>): R {
         return visitor.visitVarStmt(this);
+    }
+}
+
+export class While extends Stmt {
+    constructor(readonly condition: Expr, readonly body: Stmt) {
+        super();
+    }
+
+    accept<R>(visitor: Visitor<R>): R {
+        return visitor.visitWhileStmt(this);
     }
 }

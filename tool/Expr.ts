@@ -12,15 +12,18 @@ function main(args = process.argv.slice(2)) {
         "Binary   : Expr left, Token operator, Expr right",
         "Grouping : Expr expression",
         "Literal  : any value",
+        "Logical  : Expr left, Token operator, Expr right",
         "Unary    : Token operator, Expr right",
         "Variable : Token name",
     ]);
 
     defineAst(outputDir, "Stmt", [
         "Block      : Stmt[] statements",
-        "Expression : Expr expression", 
+        "Expression : Expr expression",
+        "If         : Expr condition, Stmt thenBranch, Stmt|null elseBranch", 
         "Print      : Expr expression",
         "Var        : Token name, Expr initializer",
+        "While      : Expr condition, Stmt body",
     ]);
 }
 

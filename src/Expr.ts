@@ -9,6 +9,7 @@ export interface Visitor<R> {
     visitBinaryExpr(expr: Binary): R;
     visitGroupingExpr(expr: Grouping): R;
     visitLiteralExpr(expr: Literal): R;
+    visitLogicalExpr(expr: Logical): R;
     visitUnaryExpr(expr: Unary): R;
     visitVariableExpr(expr: Variable): R;
 }
@@ -50,6 +51,16 @@ export class Literal extends Expr {
 
     accept<R>(visitor: Visitor<R>): R {
         return visitor.visitLiteralExpr(this);
+    }
+}
+
+export class Logical extends Expr {
+    constructor(readonly left: Expr, readonly operator: Token, readonly right: Expr) {
+        super();
+    }
+
+    accept<R>(visitor: Visitor<R>): R {
+        return visitor.visitLogicalExpr(this);
     }
 }
 
