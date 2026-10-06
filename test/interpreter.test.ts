@@ -4,10 +4,9 @@ import assert from "node:assert/strict";
 import { Scanner } from "../src/Scanner.js";
 import { Parser } from "../src/Parser.js";
 import { Interpreter } from "../src/Interpreter.js";
-import { AstPrinter } from "../src/AstPrinter.js";
 import { TokenType } from "../src/TokenType.js";
 import { RuntimeError } from "../src/RuntimeError.js";
-import { Expression, Print, type Stmt } from "../src/Stmt.js";
+import { Block, Expression, Print, Var, type Stmt } from "../src/Stmt.js";
 import { type Expr } from "../src/Expr.js";
 
 // Helper to parse a single expression (wrapped in an Expression statement if needed)
@@ -38,13 +37,7 @@ function evaluate(source: string): any {
     return interpreter.evaluate(expr);
 }
 
-// Helper to get AST string representation for an expression
-function printAst(source: string): string {
-    const expr = parseExpression(source);
-    return new AstPrinter().print(expr);
-}
-
-// Helper to execute statements through the Interpreter and capture console output
+// Helper to execute statements through the Interpreter and capture stdout
 function execute(source: string): string[] {
     const scanner = new Scanner(source);
     const tokens = scanner.scanTokens();
@@ -65,6 +58,32 @@ function execute(source: string): string[] {
     }
 
     return output;
+}
+
+// Helper to execute statements and capture both stdout and stderr (for runtime errors)
+function executeWithErrors(source: string): { output: string[]; errors: string[] } {
+    const scanner = new Scanner(source);
+    const tokens = scanner.scanTokens();
+    const parser = new Parser(tokens);
+    const statements = parser.parse();
+    const interpreter = new Interpreter();
+
+    const output: string[] = [];
+    const errors: string[] = [];
+    const originalLog = console.log;
+    const originalError = console.error;
+
+    console.log = (...args: any[]) => output.push(args.map((a) => String(a)).join(" "));
+    console.error = (...args: any[]) => errors.push(args.map((a) => String(a)).join(" "));
+
+    try {
+        interpreter.interpret(statements);
+    } finally {
+        console.log = originalLog;
+        console.error = originalError;
+    }
+
+    return { output, errors };
 }
 
 describe("Chapter 4: Scanning", () => {
@@ -101,7 +120,7 @@ describe("Chapter 4: Scanning", () => {
     });
 
     it("scans keywords and identifiers", () => {
-        const scanner = new Scanner("var foo = nil; if while true false");
+        const scanner = new Scanner("var foo = nil; if while true false print");
         const tokens = scanner.scanTokens();
         const types = tokens.map((t) => t.type);
 
@@ -115,6 +134,7 @@ describe("Chapter 4: Scanning", () => {
             TokenType.WHILE,
             TokenType.TRUE,
             TokenType.FALSE,
+            TokenType.PRINT,
             TokenType.EOF,
         ]);
     });
@@ -132,33 +152,34 @@ describe("Chapter 4: Scanning", () => {
 
 describe("Chapter 5 & 6: Parsing and Operator Precedence", () => {
     it("respects operator precedence: multiplication before addition", () => {
-        assert.equal(printAst("1 + 2 * 3"), "(+ 1 (* 2 3))");
+        assert.equal(evaluate("1 + 2 * 3"), 7);
     });
 
     it("respects left-associativity for subtraction and division", () => {
-        assert.equal(printAst("1 - 2 - 3"), "(- (- 1 2) 3)");
-        assert.equal(printAst("10 / 2 / 5"), "(/ (/ 10 2) 5)");
+        assert.equal(evaluate("1 - 2 - 3"), -4);
+        assert.equal(evaluate("10 / 2 / 5"), 1);
     });
 
     it("handles grouped expressions with parentheses", () => {
-        assert.equal(printAst("(1 + 2) * 3"), "(* (group (+ 1 2)) 3)");
+        assert.equal(evaluate("(1 + 2) * 3"), 9);
     });
 
     it("handles comparison and equality precedence", () => {
-        assert.equal(printAst("1 + 2 == 3 * 1"), "(== (+ 1 2) (* 3 1))");
-        assert.equal(printAst("1 < 2 == 3 > 4"), "(== (< 1 2) (> 3 4))");
+        assert.equal(evaluate("1 + 2 == 3 * 1"), true);
+        assert.equal(evaluate("1 < 2 == 3 > 4"), false);
     });
 
     it("handles unary operators", () => {
-        assert.equal(printAst("-123"), "(- 123)");
-        assert.equal(printAst("!true"), "(! true)");
+        assert.equal(evaluate("-123"), -123);
+        assert.equal(evaluate("!true"), false);
     });
 
-    it("throws syntax error on unclosed parentheses", () => {
+    it("handles syntax error on unclosed parentheses gracefully", () => {
         const scanner = new Scanner("(1 + ");
         const tokens = scanner.scanTokens();
         const parser = new Parser(tokens);
-        assert.throws(() => parser.parse());
+        const stmts = parser.parse();
+        assert.equal(stmts.length, 0);
     });
 });
 
@@ -214,11 +235,8 @@ describe("Chapter 7: Evaluation & Runtime Semantics", () => {
         });
 
         it("evaluates Lox truthiness rules", () => {
-            // In Lox: ONLY false and nil are falsy!
             assert.equal(evaluate("!false"), true);
             assert.equal(evaluate("!nil"), true);
-
-            // Everything else is truthy, including 0 and empty string!
             assert.equal(evaluate("!true"), false);
             assert.equal(evaluate("!0"), false);
             assert.equal(evaluate('!""'), false);
@@ -248,7 +266,7 @@ describe("Chapter 7: Evaluation & Runtime Semantics", () => {
     });
 });
 
-describe("Chapter 8: Statements and State", () => {
+describe("Chapter 8: Statements, Variables, and Scoping", () => {
     describe("Statement parsing", () => {
         it("parses expression statements", () => {
             const scanner = new Scanner("1 + 2;");
@@ -270,34 +288,54 @@ describe("Chapter 8: Statements and State", () => {
             assert.ok(stmts[0] instanceof Print);
         });
 
-        it("parses multiple statements in sequence", () => {
-            const scanner = new Scanner('print 1; 2 + 3; print "done";');
+        it("parses variable declarations", () => {
+            const scanner = new Scanner("var a = 10; var b;");
             const tokens = scanner.scanTokens();
             const parser = new Parser(tokens);
             const stmts = parser.parse();
 
-            assert.equal(stmts.length, 3);
-            assert.ok(stmts[0] instanceof Print);
-            assert.ok(stmts[1] instanceof Expression);
-            assert.ok(stmts[2] instanceof Print);
+            assert.equal(stmts.length, 2);
+            assert.ok(stmts[0] instanceof Var);
+            assert.ok(stmts[1] instanceof Var);
+        });
+
+        it("parses block statements", () => {
+            const scanner = new Scanner("{ var a = 1; print a; }");
+            const tokens = scanner.scanTokens();
+            const parser = new Parser(tokens);
+            const stmts = parser.parse();
+
+            assert.equal(stmts.length, 1);
+            assert.ok(stmts[0] instanceof Block);
+            assert.equal((stmts[0] as Block).statements.length, 2);
         });
 
         it("requires semicolon after expression statement", () => {
             const scanner = new Scanner("1 + 2");
             const tokens = scanner.scanTokens();
             const parser = new Parser(tokens);
-            assert.throws(() => parser.parse());
+            const stmts = parser.parse();
+            assert.equal(stmts.length, 0);
         });
 
         it("requires semicolon after print statement", () => {
             const scanner = new Scanner('print "missing semi"');
             const tokens = scanner.scanTokens();
             const parser = new Parser(tokens);
-            assert.throws(() => parser.parse());
+            const stmts = parser.parse();
+            assert.equal(stmts.length, 0);
+        });
+
+        it("requires closing brace for blocks", () => {
+            const scanner = new Scanner("{ var a = 1;");
+            const tokens = scanner.scanTokens();
+            const parser = new Parser(tokens);
+            const stmts = parser.parse();
+            assert.equal(stmts.length, 0);
         });
     });
 
-    describe("Statement execution", () => {
+    describe("Print and expression execution", () => {
         it("executes print statements and outputs to stdout", () => {
             const output = execute('print "hello world";');
             assert.deepEqual(output, ["hello world"]);
@@ -325,6 +363,173 @@ describe("Chapter 8: Statements and State", () => {
                 print 10 / 2;
             `);
             assert.deepEqual(output, ["line 1", "line 2", "5"]);
+        });
+    });
+
+    describe("Variables (Declaration, Access & Mutation)", () => {
+        it("declares and accesses variables", () => {
+            const output = execute(`
+                var a = 42;
+                print a;
+            `);
+            assert.deepEqual(output, ["42"]);
+        });
+
+        it("defaults uninitialized variables to nil", () => {
+            const output = execute(`
+                var unassigned;
+                print unassigned;
+            `);
+            assert.deepEqual(output, ["nil"]);
+        });
+
+        it("evaluates variables in binary expressions", () => {
+            const output = execute(`
+                var a = 10;
+                var b = 20;
+                print a + b;
+            `);
+            assert.deepEqual(output, ["30"]);
+        });
+
+        it("allows variable initialization to reference previous variables", () => {
+            const output = execute(`
+                var first = "hello";
+                var second = first + " world";
+                print second;
+            `);
+            assert.deepEqual(output, ["hello world"]);
+        });
+
+        it("reassigns existing variables", () => {
+            const output = execute(`
+                var a = 1;
+                print a;
+                a = 2;
+                print a;
+            `);
+            assert.deepEqual(output, ["1", "2"]);
+        });
+
+        it("evaluates assignment as an expression", () => {
+            const output = execute(`
+                var a;
+                print a = 99;
+            `);
+            assert.deepEqual(output, ["99"]);
+        });
+
+        it("supports chained assignment (right-associative)", () => {
+            const output = execute(`
+                var a;
+                var b;
+                a = b = 50;
+                print a;
+                print b;
+            `);
+            assert.deepEqual(output, ["50", "50"]);
+        });
+
+        it("throws RuntimeError when accessing an undefined variable", () => {
+            assert.throws(() => evaluate("undefinedVar"), RuntimeError);
+        });
+
+        it("throws RuntimeError when assigning to an undeclared variable", () => {
+            assert.throws(() => evaluate("neverDeclared = 10"), RuntimeError);
+        });
+    });
+
+    describe("Block Scopes and Lexical Scoping", () => {
+        it("executes statements inside a block", () => {
+            const output = execute(`
+                {
+                    var message = "inside block";
+                    print message;
+                }
+            `);
+            assert.deepEqual(output, ["inside block"]);
+        });
+
+        it("allows inner block to read variables from outer scope", () => {
+            const output = execute(`
+                var outer = "outer value";
+                {
+                    print outer;
+                }
+            `);
+            assert.deepEqual(output, ["outer value"]);
+        });
+
+        it("supports variable shadowing in nested scopes", () => {
+            const output = execute(`
+                var a = "global";
+                {
+                    var a = "inner";
+                    print a;
+                }
+                print a;
+            `);
+            assert.deepEqual(output, ["inner", "global"]);
+        });
+
+        it("mutates outer variable from inner scope if not shadowed", () => {
+            const output = execute(`
+                var count = 0;
+                {
+                    count = 5;
+                }
+                print count;
+            `);
+            assert.deepEqual(output, ["5"]);
+        });
+
+        it("does not leak inner variables to outer scope", () => {
+            const { errors } = executeWithErrors(`
+                {
+                    var inside = "hidden";
+                }
+                print inside;
+            `);
+            assert.ok(errors.some((e) => e.includes("Undefined variable 'inside'")));
+        });
+
+        it("handles deeply nested scopes (3 levels)", () => {
+            const output = execute(`
+                var a = "global a";
+                var b = "global b";
+                var c = "global c";
+                {
+                    var a = "outer a";
+                    var b = "outer b";
+                    {
+                        var a = "inner a";
+                        print a;
+                        print b;
+                        print c;
+                    }
+                    print a;
+                    print b;
+                    print c;
+                }
+                print a;
+                print b;
+                print c;
+            `);
+
+            assert.deepEqual(output, [
+                // Inner block
+                "inner a",
+                "outer b",
+                "global c",
+                // Outer block
+                "outer a",
+                "outer b",
+                "global c",
+                // Global scope
+                "global a",
+                "global b",
+                "global c",
+            ]);
         });
     });
 });

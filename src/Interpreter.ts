@@ -1,12 +1,15 @@
-import { Binary, Grouping, Literal, Unary, type Visitor as ExprVisitor } from "./Expr.js";
+import { Assign, Binary, Grouping, Literal, Unary, Variable, type Visitor as ExprVisitor } from "./Expr.js";
 import { Expr } from "./Expr.js";
 import { Token } from "./Token.js";
 import { TokenType } from "./TokenType.js";
 import { RuntimeError } from "./RuntimeError.js";
 import { runtimeError } from "./main.js";
-import { Expression, Print, type Visitor as StmtVisitor, type Stmt} from './Stmt.js';
+import { Var, Expression, Print, type Visitor as StmtVisitor, type Stmt, Block} from './Stmt.js';
+import { Environment } from "./Environment.js";
 
 export class Interpreter implements ExprVisitor<any>, StmtVisitor<void> {
+    private environment: Environment = new Environment();
+
     interpret(statements: Stmt[]) { 
         try {
             for (const statement of statements) {
@@ -19,6 +22,30 @@ export class Interpreter implements ExprVisitor<any>, StmtVisitor<void> {
                 throw error;
             }
         }
+    }
+
+    visitBlockStmt(stmt: Block): void {
+        this.executeBlock(stmt.statements, new Environment(this.environment));
+    }
+
+    visitAssignExpr(expr: Assign): any {
+        const value: any = this.evaluate(expr.value);
+        this.environment.assign(expr.name, value);
+        return value;
+    }
+
+    visitVarStmt(stmt: Var): void { 
+        let value: any = null;
+        
+        if (stmt.initializer != null) {
+            value = this.evaluate(stmt.initializer);
+        }
+
+        this.environment.define(stmt.name.lexeme, value);
+    }
+
+    visitVariableExpr(expr: Variable): any {
+        return this.environment.get(expr.name);
     }
 
     visitExpressionStmt(stmt: Expression): void {
@@ -97,6 +124,20 @@ export class Interpreter implements ExprVisitor<any>, StmtVisitor<void> {
 
         // Unreachable
         return null;
+    }
+
+    executeBlock(statements: Stmt[], environment: Environment) {
+        const previous: Environment = this.environment;
+
+        try {
+            this.environment = environment;
+
+            for (const statement of statements) {
+                this.execute(statement);
+            }
+        } finally {
+            this.environment = previous;
+        }
     }
 
     private execute (stmt: Stmt) {
