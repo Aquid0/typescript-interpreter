@@ -1,5 +1,5 @@
 import { Token } from './Token.js'; 
-import { Logical, Variable, Grouping, Literal, Unary, Binary, Expr, Assign } from './Expr.js';
+import { Logical, Variable, Grouping, Literal, Unary, Binary, Expr, Assign, Call } from './Expr.js';
 import { TokenType } from './TokenType.js';
 import { error } from './main.js';
 import { While, If, Block, Stmt, Print, Expression, Var } from './Stmt.js';
@@ -27,8 +27,8 @@ export class Parser {
 
     private declaration() {
         try {
+            if (this.match(TokenType.FUN)) return this.function("function");
             if (this.match(TokenType.VAR)) return this.varDeclaration();
-
             return this.statement();
         } catch (err) {
             if (err instanceof ParseError) {
@@ -171,6 +171,11 @@ export class Parser {
         return new Expression(expr);
     }
 
+    private function(kind: string): Function {
+        const name: Token = this.consume(TokenType.IDENTIFIER, `Expect ${kind} name.`);
+        this.consume()
+    }
+
     private expression(): Expr {
         return this.assignment();
     }
@@ -272,7 +277,38 @@ export class Parser {
             return new Unary(operator, right);
         }
 
-        return this.primary();
+        return this.call();
+    }
+
+    private call(): Expr {
+        let expr: Expr = this.primary();
+
+        while (true) {
+            if (this.match(TokenType.LEFT_PAREN)) {
+                expr = this.finishCall(expr);
+            } else {
+                break;
+            }
+        }
+
+        return expr;
+    }
+
+    private finishCall(callee: Expr): Expr {
+        const args: Expr[] = [];
+
+        if (!this.check(TokenType.RIGHT_PAREN)) {
+            do {
+                if (arguments.length >= 255) {
+                    error(this.peek(), "Can't have more than 255 arguments.");
+                }
+                args.push(this.expression());
+            } while (this.match(TokenType.COMMA));
+        } 
+
+        const paren: Token = this.consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.");
+    
+        return new Call(callee, paren, args);
     }
 
     private primary(): Expr {

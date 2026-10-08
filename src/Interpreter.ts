@@ -1,4 +1,4 @@
-import { Assign, Binary, Grouping, Literal, Logical, Unary, Variable, type Visitor as ExprVisitor } from "./Expr.js";
+import { Assign, Binary, Call, Grouping, Literal, Logical, Unary, Variable, type Visitor as ExprVisitor } from "./Expr.js";
 import { Expr } from "./Expr.js";
 import { Token } from "./Token.js";
 import { TokenType } from "./TokenType.js";
@@ -6,9 +6,29 @@ import { RuntimeError } from "./RuntimeError.js";
 import { runtimeError } from "./main.js";
 import { Var, Expression, Print, type Visitor as StmtVisitor, type Stmt, Block, If, While} from './Stmt.js';
 import { Environment } from "./Environment.js";
+import { LoxCallable } from "./LoxCallable.js";
+
+class ClockFunction extends LoxCallable {
+    arity(): number {
+        return 0;
+    }
+
+    call(interpreter: Interpreter, args: any[]): any {
+        return Date.now() / 1000.0;
+    }
+
+    toString(): string {
+        return "<native fn>";
+    }
+}
 
 export class Interpreter implements ExprVisitor<any>, StmtVisitor<void> {
-    private environment: Environment = new Environment();
+    private globals: Environment = new Environment(); 
+    private environment: Environment = this.globals;
+
+    constructor() {
+        this.globals.define("clock", new ClockFunction());
+    }    
 
     interpret(statements: Stmt[]) { 
         try {
@@ -22,6 +42,28 @@ export class Interpreter implements ExprVisitor<any>, StmtVisitor<void> {
                 throw error;
             }
         }
+    }
+
+    visitCallExpr(expr: Call): any {
+        const callee: any = this.evaluate(expr.callee);
+
+        const args: any[] = []
+        for (const argument of expr.args) {
+            args.push(this.evaluate(argument));
+        }
+
+        if (!(callee instanceof LoxCallable)) {
+            throw new RuntimeError(expr.paren, "Can only call functions and classes.");
+        }
+
+        
+        const func: LoxCallable = callee as LoxCallable;
+        
+        if (args.length != func.arity()) { 
+            throw new RuntimeError(expr.paren, `Expected ${func.arity()} arguments but got ${args.length}.`);
+        }
+
+        return func.call(this, args);
     }
 
     visitBlockStmt(stmt: Block): void {

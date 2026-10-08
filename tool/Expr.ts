@@ -10,6 +10,7 @@ function main(args = process.argv.slice(2)) {
     defineAst(outputDir, "Expr", [
         "Assign   : Token name, Expr value",
         "Binary   : Expr left, Token operator, Expr right",
+        "Call     : Expr callee, Token paren, Expr[] args",  
         "Grouping : Expr expression",
         "Literal  : any value",
         "Logical  : Expr left, Token operator, Expr right",
@@ -20,6 +21,7 @@ function main(args = process.argv.slice(2)) {
     defineAst(outputDir, "Stmt", [
         "Block      : Stmt[] statements",
         "Expression : Expr expression",
+        "Function   : Token name, Token[] params, Stmt[] body",
         "If         : Expr condition, Stmt thenBranch, Stmt|null elseBranch", 
         "Print      : Expr expression",
         "Var        : Token name, Expr initializer",
