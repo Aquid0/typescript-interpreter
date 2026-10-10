@@ -42,6 +42,7 @@ npx tsx src/main.ts path/to/script.lox
 ### Running Tests
 Run the test suite:
 ```bash
-npx tsx --test test/interpreter.test.ts
+npm test
 ```
+
 
