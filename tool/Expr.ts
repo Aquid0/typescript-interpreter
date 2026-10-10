@@ -24,6 +24,7 @@ function main(args = process.argv.slice(2)) {
         "Function   : Token name, Token[] params, Stmt[] body",
         "If         : Expr condition, Stmt thenBranch, Stmt|null elseBranch", 
         "Print      : Expr expression",
+        "Return     : Token keyword, Expr|null value",
         "Var        : Token name, Expr initializer",
         "While      : Expr condition, Stmt body",
     ]);

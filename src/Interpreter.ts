@@ -4,9 +4,11 @@ import { Token } from "./Token.js";
 import { TokenType } from "./TokenType.js";
 import { RuntimeError } from "./RuntimeError.js";
 import { runtimeError } from "./main.js";
-import { Var, Expression, Print, type Visitor as StmtVisitor, type Stmt, Block, If, While} from './Stmt.js';
+import { Var, Expression, Print, type Visitor as StmtVisitor, type Stmt, Block, If, While, Function, Return} from './Stmt.js';
 import { Environment } from "./Environment.js";
 import { LoxCallable } from "./LoxCallable.js";
+import { LoxFunction } from "./LoxFunction.js";
+import { ReturnException } from "./Return.js";
 
 class ClockFunction extends LoxCallable {
     arity(): number {
@@ -23,7 +25,7 @@ class ClockFunction extends LoxCallable {
 }
 
 export class Interpreter implements ExprVisitor<any>, StmtVisitor<void> {
-    private globals: Environment = new Environment(); 
+    globals: Environment = new Environment(); 
     private environment: Environment = this.globals;
 
     constructor() {
@@ -42,6 +44,19 @@ export class Interpreter implements ExprVisitor<any>, StmtVisitor<void> {
                 throw error;
             }
         }
+    }
+
+    visitFunctionStmt(stmt: Function): void {
+        // Capture environment that is active when function is DECLARED so we can capture closures
+        const func: LoxFunction = new LoxFunction(stmt, this.environment); 
+        this.environment.define(stmt.name.lexeme, func);
+    }
+
+    visitReturnStmt(stmt: Return): void {
+        let value: any = null;
+        if (stmt.value != null) value = this.evaluate(stmt.value);
+
+        throw new ReturnException(value);
     }
 
     visitCallExpr(expr: Call): any {

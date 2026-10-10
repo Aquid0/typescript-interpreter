@@ -2,7 +2,7 @@ import { Token } from './Token.js';
 import { Logical, Variable, Grouping, Literal, Unary, Binary, Expr, Assign, Call } from './Expr.js';
 import { TokenType } from './TokenType.js';
 import { error } from './main.js';
-import { While, If, Block, Stmt, Print, Expression, Var } from './Stmt.js';
+import { Function, While, If, Block, Stmt, Print, Expression, Var, Return } from './Stmt.js';
 
 class ParseError extends Error {};
 
@@ -56,10 +56,22 @@ export class Parser {
         if (this.match(TokenType.FOR)) return this.forStatement();
         if (this.match(TokenType.IF)) return this.ifStatement();
         if (this.match(TokenType.PRINT)) return this.printStatement();
+        if (this.match(TokenType.RETURN)) return this.returnStatement();
         if (this.match(TokenType.WHILE)) return this.whileStatement();
         if (this.match(TokenType.LEFT_BRACE)) return new Block(this.block());
 
         return this.expressionStatement();
+    }
+
+    private returnStatement(): Stmt {
+        const keyword: Token = this.previous();
+        let value: Expr | null = null;
+        if (!this.check(TokenType.SEMICOLON)) {
+            value = this.expression();
+        }
+
+        this.consume(TokenType.SEMICOLON, "Expect ';' after return value.");
+        return new Return(keyword, value);
     }
 
     private forStatement(): Stmt {
@@ -173,7 +185,23 @@ export class Parser {
 
     private function(kind: string): Function {
         const name: Token = this.consume(TokenType.IDENTIFIER, `Expect ${kind} name.`);
-        this.consume()
+        this.consume(TokenType.LEFT_PAREN, `Expect '(' after ${kind} name.`);
+
+        const parameters: Token[] = [];
+        if (!this.check(TokenType.RIGHT_PAREN)) {
+            do {
+                if (parameters.length >= 255) {
+                    this.error(this.peek(), "Can't have more than 255 parameters.");
+                }
+
+                parameters.push(this.consume(TokenType.IDENTIFIER, "Expect parameter name."));
+            } while (this.match(TokenType.COMMA));
+        }
+        this.consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.");
+
+        this.consume(TokenType.LEFT_BRACE, `Expect '{' before ${kind} body.`);
+        const body: Stmt[] = this.block();
+        return new Function(name, parameters, body);
     }
 
     private expression(): Expr {
